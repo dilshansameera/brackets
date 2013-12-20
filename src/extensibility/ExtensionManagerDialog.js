@@ -86,99 +86,75 @@ define(function (require, exports, module) {
                 ],
                 false
             ),
-            $dlg = dlg.getElement(),
-            disabled = false;
+            $dlg = dlg.getElement();
         
-        function ok() {
-            // Disable the dialog buttons so the user can't dismiss it,
-            // and show a message indicating that we're doing the updates,
-            // in case it takes a long time.
-            disabled = true;
-            $dlg.find(".dialog-button").prop("disabled", true);
-            $dlg.find(".close").hide();
-            $dlg.find(".dialog-message")
-                .text(Strings.PROCESSING_EXTENSIONS)
-                .append("<span class='spinner spin'/>");
-            
-            // Process the changes.
-            ExtensionManager.removeMarkedExtensions()
-                .done(function () {
-                    ExtensionManager.updateExtensions()
+            $dlg.one("buttonClick", function (e, buttonId) {
+                if (buttonId === Dialogs.DIALOG_BTN_OK) {
+                    // Disable the dialog buttons so the user can't dismiss it,
+                    // and show a message indicating that we're doing the updates,
+                    // in case it takes a long time.
+                    $dlg.find(".dialog-button").prop("disabled", true);
+                    $dlg.find(".close").hide();
+                    $dlg.find(".dialog-message")
+                        .text(Strings.PROCESSING_EXTENSIONS)
+                        .append("<span class='spinner spin'/>");
+                    
+                    ExtensionManager.removeMarkedExtensions()
                         .done(function () {
-                            dlg.close();
-                            CommandManager.execute(Commands.FILE_QUIT);
+                            ExtensionManager.updateExtensions()
+                                .done(function () {
+                                    dlg.close();
+                                    CommandManager.execute(Commands.FILE_QUIT);
+                                })
+                                .fail(function (errorArray) {
+                                    dlg.close();
+                                    
+                                    // This error case should be very uncommon.
+                                    // Just let the user know that we couldn't update
+                                    // this extension and log the errors to the console.
+                                    var ids = [];
+                                    errorArray.forEach(function (errorObj) {
+                                        ids.push(errorObj.item);
+                                        if (errorObj.error && errorObj.error.forEach) {
+                                            console.error("Errors for ", errorObj.item);
+                                            errorObj.error.forEach(function (error) {
+                                                console.error(Package.formatError(error));
+                                            });
+                                        }
+                                    });
+                                    Dialogs.showModalDialog(
+                                        DefaultDialogs.DIALOG_ID_ERROR,
+                                        Strings.EXTENSION_MANAGER_UPDATE,
+                                        StringUtils.format(Strings.EXTENSION_MANAGER_UPDATE_ERROR, ids.join(", "))
+                                    ).done(function () {
+                                        // We still have to quit even if some of the removals failed.
+                                        CommandManager.execute(Commands.FILE_QUIT);
+                                    });
+                                });
                         })
                         .fail(function (errorArray) {
                             dlg.close();
+                            ExtensionManager.cleanupUpdates();
                             
-                            // This error case should be very uncommon.
-                            // Just let the user know that we couldn't update
-                            // this extension and log the errors to the console.
                             var ids = [];
                             errorArray.forEach(function (errorObj) {
                                 ids.push(errorObj.item);
-                                if (errorObj.error && errorObj.error.forEach) {
-                                    console.error("Errors for ", errorObj.item);
-                                    errorObj.error.forEach(function (error) {
-                                        console.error(Package.formatError(error));
-                                    });
-                                }
                             });
                             Dialogs.showModalDialog(
                                 DefaultDialogs.DIALOG_ID_ERROR,
-                                Strings.EXTENSION_MANAGER_UPDATE,
-                                StringUtils.format(Strings.EXTENSION_MANAGER_UPDATE_ERROR, ids.join(", "))
+                                Strings.EXTENSION_MANAGER_REMOVE,
+                                StringUtils.format(Strings.EXTENSION_MANAGER_REMOVE_ERROR, ids.join(", "))
                             ).done(function () {
                                 // We still have to quit even if some of the removals failed.
                                 CommandManager.execute(Commands.FILE_QUIT);
                             });
                         });
-                })
-                .fail(function (errorArray) {
+                } else {
                     dlg.close();
                     ExtensionManager.cleanupUpdates();
-                    
-                    var ids = [];
-                    errorArray.forEach(function (errorObj) {
-                        ids.push(errorObj.item);
-                    });
-                    Dialogs.showModalDialog(
-                        DefaultDialogs.DIALOG_ID_ERROR,
-                        Strings.EXTENSION_MANAGER_REMOVE,
-                        StringUtils.format(Strings.EXTENSION_MANAGER_REMOVE_ERROR, ids.join(", "))
-                    ).done(function () {
-                        // We still have to quit even if some of the removals failed.
-                        CommandManager.execute(Commands.FILE_QUIT);
-                    });
-                });
-        }
-        
-        function cancel() {
-            ExtensionManager.cleanupUpdates();
-            ExtensionManager.unmarkAllForRemoval();
-            dlg.close();
-        }
-        
-        function escHandler(e) {
-            if (!disabled && e.keyCode === KeyEvent.DOM_VK_ESCAPE) {
-                cancel();
-            }
-        }
-        
-        // We have to explicitly handle button clicks and the Esc key when autoDismiss is false.
-        $dlg.one("click", ".dialog-button", function (e) {
-            var id = $(this).attr("data-button-id");
-            if (id === Dialogs.DIALOG_BTN_CANCEL) {
-                cancel();
-            } else {
-                ok();
-            }
-        });
-        
-        $(window.document.body).on("keyup", escHandler);
-        $dlg.done(function () {
-            $(window.document.body).off("keyup", escHandler);
-        });
+                    ExtensionManager.unmarkAllForRemoval();
+                }
+            });
     }
     
     /**

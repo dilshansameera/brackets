@@ -70,6 +70,22 @@ define(function (require, exports, module) {
         $dlg.data("buttonId", buttonId);
         $dlg.modal("hide");
     }
+    
+    /**
+     * @private
+     * If autoDismiss is true, then dismisses the dialog. Otherwise just raises an event that the
+     * given button was clicked.
+     * @param {$.Element} $dlg The dialog element to be dismissed.
+     * @param {string} buttonId The ID of the button that was clicked.
+     * @param {boolean} autoDismiss Whether to autodismiss the dialog on a button click.
+     */
+    function _processButton($dlg, buttonId, autoDismiss) {
+        if (autoDismiss) {
+            _dismissDialog($dlg, buttonId);
+        } else {
+            $dlg.triggerHandler("buttonClick", buttonId);
+        }
+    }
 
     /**
      * @private
@@ -157,8 +173,8 @@ define(function (require, exports, module) {
             }
         }
         
-        if (autoDismiss && buttonId) {
-            _dismissDialog(this, buttonId);
+        if (buttonId) {
+            _processButton(this, buttonId, autoDismiss);
         }
         
         // Stop any other global hooks from processing the event (but
@@ -275,11 +291,9 @@ define(function (require, exports, module) {
         });
         
         // Click handler for buttons
-        if (autoDismiss) {
-            $dlg.one("click", ".dialog-button", function (e) {
-                _dismissDialog($dlg, $(this).attr("data-button-id"));
-            });
-        }
+        $dlg.one("click", ".dialog-button", function (e) {
+            _processButton($dlg, $(this).attr("data-button-id"), autoDismiss);
+        });
         
         $(".last-backdrop").removeClass("last-backdrop");
         
